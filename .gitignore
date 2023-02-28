@@ -262,3 +262,6 @@ __pycache__/
 
 # Images generated
 *.bmp
+
+# Not ignore lena gray img
+!*/lena_gray.bmp
