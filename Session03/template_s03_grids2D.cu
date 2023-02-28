@@ -513,10 +513,10 @@ __global__ void erode_3x3_kernel_2D(byte* img_gray_in, byte* img_gray_out, int w
 	{
 		for (int yy = y-1; yy <= y+1; yy++)
 		{
+			if (xx < 0 || xx >= w || yy < 0 || yy >= h)
+				return;
 			if (img_gray_in[(yy * w) + xx] == 0)
-			{
 				value = 0;
-			}
 		}
 	}
 
@@ -638,7 +638,8 @@ void ejercicio_03_1_01_GPU_th_erode()
 	cudaFree(dev_rgb02);
 	cudaFree(dev_rgb03);
 	// Free CPU memory
-	// ...
+	delete[] rgb_out02;
+	delete[] rgb_out03;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -756,6 +757,8 @@ void ejercicio_03_2_02_GPU_filter()
 	cudaFree(dev_gray_02);
 	cudaFree(dev_rgb02);
 	cudaFree(dev_filter);
+	// Free CPU memory
+	delete[] rgb_out02;
 }
 
 
@@ -785,31 +788,37 @@ __device__ void copy_border_block(byte* img_gray_in, byte* img_gray_sh, int w, i
 
 	////////////////////////////////////////
 	// Copy x-axis borders
-	// ...
+	if (threadIdx.x == 0)
+		img_gray_sh[(x_sh - 1) + (y_sh * BLOCK_W)] = img_gray_in[(x - 1) + (y * w)];
+	if (threadIdx.x == blockDim.x - 1)
+		img_gray_sh[(x_sh + 1) + (y_sh * BLOCK_W)] = img_gray_in[(x + 1) + (y * w)];
 
 	
 	////////////////////////////////////////
-	// Copy y-axis borders	
-	// ...
+	// Copy y-axis borders
+	if(threadIdx.y == 0)
+		img_gray_sh[x_sh + ((y_sh - 1) * BLOCK_W)] = img_gray_in[x + ((y - 1) * w)];
+	if(threadIdx.y == blockDim.y - 1)
+		img_gray_sh[x_sh + ((y_sh + 1) * BLOCK_W)] = img_gray_in[x + ((y + 1) * w)];
 	
 
 	/////////////////////////////////////
 	// Copy 4 corners pixels
 	if (threadIdx.x == 0 && threadIdx.y == 0)
 	{
-		// ...
+		img_gray_sh[(x_sh - 1) + (y_sh - 1)] = img_gray_in[(x - 1) + ((y - 1) * w)];
 	}
 	else if (threadIdx.x == 0 && threadIdx.y == blockDim.y - 1)
 	{
-		// ...
+		img_gray_sh[(x_sh - 1) + (y_sh + 1)] = img_gray_in[(x - 1) + ((y + 1) * w)];
 	}
 	else if (threadIdx.x == blockDim.x - 1 && threadIdx.y == 0)
 	{
-		// ...
+		img_gray_sh[(x_sh + 1) + (y_sh - 1)] = img_gray_in[(x + 1) + ((y - 1) * w)];
 	}
 	else if (threadIdx.x == blockDim.x - 1  && threadIdx.y == blockDim.y - 1)
 	{
-		// ...
+		img_gray_sh[(x_sh + 1) + (y_sh + 1)] = img_gray_in[(x + 1) + ((y + 1) * w)];
 	}
 }
 
@@ -831,49 +840,40 @@ __global__ void erode_3x3_kernel_2D_shared_mem(byte* img_gray_in, byte* img_gray
 	int ipos = (y * w) + x;
 
 	// Get the array index within the shared memory block
-	int ipos_sh = (y_sh * blockDim.x) + x_sh;
+	int ipos_sh = (y_sh * BLOCK_W) + x_sh;
 
 	// Pixel value
-	byte pixel = 255;
+	byte pixel = 0;
 
 	// Declare the shared memory needed
 	__shared__ byte img_gray_sh[BLOCK_W * BLOCK_H];
 
 	// Set the values from the input image to the shared image (no borders taked into account)
-	img_gray_sh[x_sh + (y_sh * BLOCK_W)] = img_gray_in[x + (y * w)];
+	img_gray_sh[ipos_sh] = img_gray_in[ipos];
 
-	// Copy the memory outside the central part of the block --> borders of the mark of the block
-	if (x_sh == 1)
-		img_gray_sh[(x_sh - 1) + (y_sh * BLOCK_W)] = img_gray_in[(x - 1) + (y * w)];
-	if(x_sh == BLOCK_W - 1)
-		img_gray_sh[(x_sh + 1) + (y_sh * BLOCK_W)] = img_gray_in[(x + 1) + (y * w)];
-	if(y_sh == 1)
-		img_gray_sh[x_sh + ((y_sh - 1) * BLOCK_W)] = img_gray_in[x + ((y - 1) * w)];
-	if(y_sh == BLOCK_H - 1)
-		img_gray_sh[x_sh + ((y_sh + 1) * BLOCK_W)] = img_gray_in[x + ((y + 1) * w)];
+	// Copy the memory outside the central part of the block --> borders of the mark of the 
+	copy_border_block(img_gray_in, img_gray_sh, w, h, x, y, x_sh, y_sh);
 
 	// Wait for all the threads to finish image copy to shared memory
 	__syncthreads();
 
 	// Apply the erode
-	for (int i = 0; i < 3; i++) 
+	for (int i = 0; i < 3; i++)
 	{
 		for (int j = 0; j < 3; j++) 
 		{
 			int xx_sh = x_sh + j - 1;
-			int yy_sh = (y_sh + i - 1) * w;
-			if (img_gray_sh[(yy_sh * BLOCK_W) + xx_sh] == 0)
+			int yy_sh = y_sh + i - 1;
+			if (img_gray_sh[(yy_sh * BLOCK_W) + xx_sh] == pixel)
 			{
-				img_gray_sh[(y_sh * BLOCK_W) + x_sh] = 0;
-			}
-			else {
-				img_gray_sh[(y_sh * BLOCK_W) + x_sh] = pixel;
+				img_gray_sh[ipos_sh] = pixel;
+				return;
 			}
 		}
 	}
 
 	// Save the value to the output image
-	img_gray_out[x + (y * w)] = img_gray_sh[x_sh + (y_sh * BLOCK_W)];
+	img_gray_out[ipos] = img_gray_sh[ipos_sh];
 }
 
 
@@ -929,7 +929,7 @@ void ejercicio_03_2_01_GPU_th_erode_shared_mem()
 	byte th2 = 127;
 
 	// Kernels calling with gray scale images
-	threshold_kernel_2d   <<< dim_grid, dim_block >>> (dev_gray_01, dev_gray_02, w, h, th1, th2);
+	threshold_kernel_2d <<< dim_grid, dim_block >>> (dev_gray_01, dev_gray_02, w, h, th1, th2);
 	erode_3x3_kernel_2D_shared_mem <<< dim_grid, dim_block >>> (dev_gray_02, dev_gray_03, w, h);
 
 	// Kernels calling to convert gray to rgb images
@@ -957,6 +957,9 @@ void ejercicio_03_2_01_GPU_th_erode_shared_mem()
 	cudaFree(dev_gray_03);
 	cudaFree(dev_rgb02);
 	cudaFree(dev_rgb03);
+	// Free CPU memory
+	delete[] rgb_out02;
+	delete[] rgb_out03;
 }
 
 
@@ -1102,7 +1105,7 @@ int main()
 	//ejercicio_02_3_02_GPU_mandelbrot();
 
 	// Sesion 03
-	//ejercicio_03_1_01_GPU_th_erode();
+	ejercicio_03_1_01_GPU_th_erode();
 	//ejercicio_03_2_02_GPU_filter();
 
 	// Sesion 03 with shared mem
