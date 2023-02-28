@@ -49,38 +49,6 @@ __global__ void traslacion(unsigned char *image, int h, int w) {
 	}
 }
 
-__global__ void traslacion_rotacion(unsigned char* image, int h, int w) {
-
-	int x_min = 450;
-	int x_max = 550;
-	int y_min = 200;
-	int y_max = 300;
-	//int t_x_1 = -posx - ((x_max - x_min) / 2);
-	//int t_y_1 = -posy - ((y_max - y_min) / 2);
-	//int t_x_2 = posx + ((x_max - x_min) / 2);
-	//int t_y_2 = posy + ((y_max - y_min) / 2);
-	//int angulo_giro = 45;
-
-	int posx = threadIdx.x;
-	int posy = blockIdx.x;
-
-	float matrix_tx[9] = {0.5f, 0.f, 0.f, 0.5f, 1.f, 0.f, 0.f, 0.f, 1.f};
-	float vector[3] = { posx, posy, 1 };
-
-	if (posx <= x_max && posx >= x_min && posy <= y_max && posy >= y_min) {
-
-		float vec_out[3];
-		matrix_vector_mult(matrix_tx, vector, vec_out);
-
-		int posx_out = vec_out[0];
-		int posy_out = vec_out[1];
-
-		image[(posx_out + posy_out * w) * 3 + 0] = image[(posx + posy * w) * 3 + 0];      //R
-		image[(posx_out + posy_out * w) * 3 + 1] = image[(posx + posy * w) * 3 + 1];	  //G
-		image[(posx_out + posy_out * w) * 3 + 2] = image[(posx + posy * w) * 3 + 2];	  //B
-	}
-}
-
 __global__ void generaRGB(unsigned char *image, int h, int w) {
 	int posx = threadIdx.x;
 	int posy = blockIdx.x;
@@ -107,9 +75,7 @@ int main()
 	/// Kernel
 	generaRGB << <height, width >> > (dev_rgb, height, width);
 
-	//traslacion << <height, width >> > (dev_rgb, height, width);
-
-	traslacion_rotacion << <height, width >> > (dev_rgb, height, width);
+	traslacion << <height, width >> > (dev_rgb, height, width);
 
 	/// Copia resultado GPU a CPU
 	cudaMemcpy(rgb, dev_rgb, width * height * 3 * sizeof(unsigned char), cudaMemcpyDeviceToHost);

@@ -228,8 +228,6 @@ void sample_01_GPU()
 	// Free GPU memory
 	cudaFree(dev_rgb);
 	delete[] rgb;
-	// Free CPU memory
-	// ...
 }
 
 
@@ -451,8 +449,6 @@ void sample_03_GPU_thresholding()
 	// Free GPU memory
 	cudaFree(dev_rgb);
 	delete[] rgb;
-	// Free CPU memory
-	// ...
 }
 
 
@@ -465,7 +461,12 @@ void sample_03_GPU_thresholding()
 
 __global__ void color_scale_kernel_sesion02(byte* rgb, int w, int h)
 {
-	// ... STUDENT CODE
+	int posx = blockIdx.x;
+	int posy = threadIdx.x;
+
+	rgb[(posx + (posy * w)) * 3 + 0] = posy;  //R
+	rgb[(posx + (posy * w)) * 3 + 1] = posx;  //G
+	rgb[(posx + (posy * w)) * 3 + 2] = 100;   //B
 }
 
 
@@ -473,7 +474,9 @@ __global__ void color_scale_kernel_sesion02(byte* rgb, int w, int h)
 
 __device__ void matrix_vector_mult(float* matrix, float* vector, float* vector_out)
 {
-	// ... STUDENT CODE
+	vector_out[0] = matrix[0] * vector[0] + matrix[1] * vector[1] + matrix[2] * vector[2];
+	vector_out[1] = matrix[3] * vector[0] + matrix[4] * vector[1] + matrix[5] * vector[2];
+	vector_out[2] = matrix[6] * vector[0] + matrix[7] * vector[1] + matrix[8] * vector[2];
 }
 
 __global__ void traslation_kernel(byte* rgb, byte* rgb_out, int w, int h)
@@ -493,35 +496,35 @@ __global__ void traslation_kernel(byte* rgb, byte* rgb_out, int w, int h)
 	int posy = threadIdx.x;
 
 	// Always copy the original image to the source
-	//rgb_out[(posx + posy * w) * 3 + 0] = rgb[(posx + posy * w) * 3 + 0];    //R
-	//rgb_out[(posx + posy * w) * 3 + 1] = rgb[(posx + posy * w) * 3 + 1];	//G
-	//rgb_out[(posx + posy * w) * 3 + 2] = rgb[(posx + posy * w) * 3 + 2];	//B
+	rgb_out[(posx + posy * w) * 3 + 0] = rgb[(posx + posy * w) * 3 + 0];    //R
+	rgb_out[(posx + posy * w) * 3 + 1] = rgb[(posx + posy * w) * 3 + 1];	//G
+	rgb_out[(posx + posy * w) * 3 + 2] = rgb[(posx + posy * w) * 3 + 2];	//B
 
 	// Wait to copy all the image values for this block
-	//__syncthreads();
+	__syncthreads();
 
 	// If we are in the region of interest...
 	if (posx >= x_min && posx <= x_max &&
 		posy >= y_min && posy <= y_max)
 	{
 		// Transformation matrix
-		// float matrix_tx[9] = { ... };
+		float matrix_tx[9] = { 1, 0, t_x, 0, 1, t_y, 0, 0, 1 };
 
 		// Initial position
-		// float vector[3] = { ... };
+		float vector[3] = { posx, posy, 1 };
 
 		// Final position
-		//float vec_out[3];
+		float vec_out[3];
 
 		// Get the final position
-		//matrix_vector_mult(matrix_tx, vector, vec_out);
-		//int posx_out = ...;
-		//int posy_out = ...;
+		matrix_vector_mult(matrix_tx, vector, vec_out);
+		int posx_out = vec_out[0];
+		int posy_out = vec_out[1];
 
 		// Set the output image values
-		//rgb_out[...] = rgb[(posx + posy * w) * 3 + 0];  //R
-		//rgb_out[...] = rgb[(posx + posy * w) * 3 + 1];	//G
-		//rgb_out[...] = rgb[(posx + posy * w) * 3 + 2];	//B
+		rgb_out[(posx_out + posy_out * w) * 3 + 0] = rgb[(posx + posy * w) * 3 + 0];    //R
+		rgb_out[(posx_out + posy_out * w) * 3 + 1] = rgb[(posx + posy * w) * 3 + 1];	//G
+		rgb_out[(posx_out + posy_out * w) * 3 + 2] = rgb[(posx + posy * w) * 3 + 2];	//B
 	}
 }
 
@@ -530,12 +533,68 @@ __global__ void traslation_kernel(byte* rgb, byte* rgb_out, int w, int h)
 
 __device__ float deg2rad(float angle_deg)
 {
-	// ... STUDENT CODE
+	return angle_deg * 3.1416f / 180;
 }
 
 __global__ void traslation_rotation_kernel(byte* rgb, byte* rgb_out, int w, int h)
 {
-	// ... STUDENT CODE
+	// Region to work with
+	float x_min = 450.0f;
+	float x_max = 550.0f;
+	float y_min = 200.0f;
+	float y_max = 300.0f;
+
+	// Transformation parameters
+	float t_x = -x_min - ((x_max - x_min) / 2);
+	float t_y = -y_min - ((y_max - y_min) / 2);
+
+	// Rotation parameters
+	float rad = deg2rad(45.f);
+
+	// Position for the pixel
+	int posx = blockIdx.x;
+	int posy = threadIdx.x;
+
+	// Always copy the original image to the source
+	rgb_out[(posx + posy * w) * 3 + 0] = rgb[(posx + posy * w) * 3 + 0];    //R
+	rgb_out[(posx + posy * w) * 3 + 1] = rgb[(posx + posy * w) * 3 + 1];	//G
+	rgb_out[(posx + posy * w) * 3 + 2] = rgb[(posx + posy * w) * 3 + 2];	//B
+
+	// Wait to copy all the image values for this block
+	__syncthreads();
+
+	// If we are in the region of interest...
+	if (posx >= x_min && posx <= x_max &&
+		posy >= y_min && posy <= y_max)
+	{
+		// Transformation matrix
+		float t_x2 = -200.f;
+		float t_y2 = 100.f;
+		float matrix_tx_tras1[9] = { 1, 0, t_x, 0, 1, t_y, 0, 0, 1 };
+		float matrix_tx_rot[9] = { cos(rad), -sin(rad), 0, sin(rad), cos(rad), 0, 0, 0, 1 };
+		float matrix_tx_tras2[9] = { cos(rad)/2, -sin(rad), posx + t_x2, sin(rad), cos(rad)/2, posy + t_y2, 0, 0, 1 };
+
+		// Initial position
+		float vector[3] = { posx, posy, 1 };
+
+		// Final position
+		float vec_out_tras1[3];
+		float vec_out_tras2[3];
+		float vec_out_rot[3];
+		
+		// Get the final position
+		matrix_vector_mult(matrix_tx_tras1, vector, vec_out_tras1);
+		matrix_vector_mult(matrix_tx_rot, vec_out_tras1, vec_out_rot);
+		matrix_vector_mult(matrix_tx_tras2, vec_out_rot, vec_out_tras2);
+
+		int posx_out = int(vec_out_tras2[0]);
+		int posy_out = int(vec_out_tras2[1]);
+
+		// Set the output image values
+		rgb_out[(posx_out + posy_out * w) * 3 + 0] = rgb[(posx + posy * w) * 3 + 0];    //R
+		rgb_out[(posx_out + posy_out * w) * 3 + 1] = rgb[(posx + posy * w) * 3 + 1];	//G
+		rgb_out[(posx_out + posy_out * w) * 3 + 2] = rgb[(posx + posy * w) * 3 + 2];	//B
+	}
 }
 
 
@@ -583,16 +642,17 @@ void sample_03_GPU_geom_tx()
 	byte* dev_rgb02;
 
 	// Allocate GPU memory
-	// ...
+	cudaMalloc((void**)&dev_rgb01, IMAGE_SIZE_RGB * sizeof(byte));
+	cudaMalloc((void**)&dev_rgb02, IMAGE_SIZE_RGB * sizeof(byte));
 
 
 	// (1) - Color scale sample /////////////////////////////////////////////////////////
 
 	// Get the color for each pixel
-	// color_scale_kernel <<< WIDTH, HEIGHT >>> (dev_rgb01, WIDTH, HEIGHT);
+	color_scale_kernel_sesion02 <<< WIDTH, HEIGHT >>> (dev_rgb01, WIDTH, HEIGHT);
 
 	// Copy the memory to CPU
-	// ...
+	cudaMemcpy(rgb, dev_rgb01, IMAGE_SIZE_RGB * sizeof(byte), cudaMemcpyDeviceToHost);
 
 	// Write bmp file
 	write_bmp(filename01, WIDTH, HEIGHT, (char*)rgb);
@@ -605,10 +665,10 @@ void sample_03_GPU_geom_tx()
 	// (2) Translate sample /////////////////////////////////////////////////////////////
 
 	// Get the color for each pixel
-	// traslation_kernel <<< WIDTH, HEIGHT >>> (dev_rgb01, dev_rgb02, WIDTH, HEIGHT);
+	traslation_kernel <<< WIDTH, HEIGHT >>> (dev_rgb01, dev_rgb02, WIDTH, HEIGHT);
 
 	// Copy the memory to CPU
-	// ...
+	cudaMemcpy(rgb, dev_rgb02, IMAGE_SIZE_RGB * sizeof(byte), cudaMemcpyDeviceToHost);
 
 	// Write bmp file
 	write_bmp(filename02, WIDTH, HEIGHT, (char*)rgb);
@@ -621,10 +681,10 @@ void sample_03_GPU_geom_tx()
 	// (3) Translate & Rotate  //////////////////////////////////////////////////////////
 
 	// Get the color for each pixel
-	// traslation_rotation_kernel <<< WIDTH, HEIGHT >>> (dev_rgb01, dev_rgb02, WIDTH, HEIGHT);
+	traslation_rotation_kernel <<< WIDTH, HEIGHT >>> (dev_rgb01, dev_rgb02, WIDTH, HEIGHT);
 
 	// Copy the memory to CPU
-	// ...
+	cudaMemcpy(rgb, dev_rgb02, IMAGE_SIZE_RGB * sizeof(byte), cudaMemcpyDeviceToHost);
 
 	// Write bmp file
 	write_bmp(filename03, WIDTH, HEIGHT, (char*)rgb);
@@ -643,10 +703,10 @@ void sample_03_GPU_geom_tx()
 	// ...
 
 	// Write bmp file
-	write_bmp(filename04, WIDTH, HEIGHT, (char*)rgb);
+	//write_bmp(filename04, WIDTH, HEIGHT, (char*)rgb);
 
 	// Some debug
-	printf("GPU color-scale translate + rotate done... --> %s \n", filename04);
+	//printf("GPU color-scale translate + rotate done... --> %s \n", filename04);
 	/////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -666,21 +726,21 @@ void sample_03_GPU_geom_tx()
 	// ...
 
 	// Write bmp file
-	write_bmp(filename05, WIDTH, HEIGHT, (char*)rgb);
+	//write_bmp(filename05, WIDTH, HEIGHT, (char*)rgb);
 
 	// Free transformation matrix memory
 	// ...
 
 	// Some debug
-	printf("GPU color-scale translate + rotate done... --> %s \n", filename05);
+	//printf("GPU color-scale translate + rotate done... --> %s \n", filename05);
 	/////////////////////////////////////////////////////////////////////////////////////
 
 
 	// Free GPU memory
-	// ...
+	cudaFree(dev_rgb01);
 
 	// Free CPU memory
-	// ...
+	cudaFree(dev_rgb02);
 }
 
 
@@ -699,7 +759,7 @@ int main()
 
 	// Sesion 02
 	//sample_03_GPU_thresholding();
-	//sample_03_GPU_geom_tx();
+	sample_03_GPU_geom_tx();
 
 	return EXIT_SUCCESS;
 }
