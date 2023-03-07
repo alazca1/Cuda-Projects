@@ -755,10 +755,10 @@ int main()
 	// Sesion 01
 	//sample_01_GPU();
 	//sample_01_CPU();
-	//sample_02_GPU_mandelbrot();
+	sample_02_GPU_mandelbrot();
 
 	// Sesion 02
-	//sample_03_GPU_thresholding();
+	sample_03_GPU_thresholding();
 	sample_03_GPU_geom_tx();
 
 	return EXIT_SUCCESS;

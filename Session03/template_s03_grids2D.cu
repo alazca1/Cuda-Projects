@@ -1113,11 +1113,11 @@ int main()
 	//ejercicio_02_3_02_GPU_mandelbrot();
 
 	// Sesion 03
-	//ejercicio_03_1_01_GPU_th_erode();
+	ejercicio_03_1_01_GPU_th_erode();
 	ejercicio_03_2_02_GPU_filter();
 
 	// Sesion 03 with shared mem
-	//ejercicio_03_2_01_GPU_th_erode_shared_mem();
+	ejercicio_03_2_01_GPU_th_erode_shared_mem();
 	ejercicio_03_2_02_GPU_filter_shared_mem();
 
 	return EXIT_SUCCESS;
