@@ -668,9 +668,9 @@ __global__ void filter_3x3_kernel_2D(byte* img_gray_in, byte* img_gray_out, int*
 		for (int j = 0; j < 3; j++)
 		{
 			int xx = x + j - 1;
-			int yy = (y + i - 1) * w;
-			if (xx >= w || y >= h) return;
-			int iipos = (((y + i - 1) * w) + (x + j - 1));
+			int yy = y + i - 1;
+			if (xx >= w || yy >= h) return;
+			int iipos = xx + (yy * w);
 			pixel += filter[(3 * i) + j] * img_gray_in[iipos];
 		}
 	}
@@ -970,36 +970,34 @@ void ejercicio_03_2_01_GPU_th_erode_shared_mem()
 __global__ void filter_3x3_kernel_2D_shared_mem(byte* img_gray_in, byte* img_gray_out, int* filter, int w, int h) 
 {
 	// Get the x and y coordinates from the image using threadIdx and blockIdx values
-	//int x = ...
-	//int y = ...
+	int x = threadIdx.x + (blockIdx.x * blockDim.x);
+	int y = threadIdx.y + (blockIdx.y * blockDim.y);
 
 	// Get the coordinates in the shared memory block
-	//int x_sh = ...
-	//int y_sh = ...
+	int x_sh = threadIdx.x + 1;
+	int y_sh = threadIdx.y + 1;
 
 	// Check image limits
-	//if (x >= w || y >= h)
-	//{
-	//	...
-	//}
+	if (x >= w || y >= h)
+		return;
 
 	// Get the array index with x & y coordinates in the image
-	//int ipos = ...
+	int ipos = (y * w) + x;
 
 	// Get the array index within the shared memory block
-	//int ipos_sh = ...
+	int ipos_sh = (y_sh * BLOCK_W) + x_sh;
 
 	// Declare the shared memory needed
-	//__shared__ byte img_gray_sh[BLOCK_W * BLOCK_H];
+	__shared__ byte img_gray_sh[BLOCK_W * BLOCK_H];
 
 	// Set the values from the input image to the shared image (no borders taked into account)
-	// ...
+	img_gray_sh[ipos_sh] = img_gray_in[ipos];
 
 	// Copy the memory outside the central part of the block --> borders of the mark of the block
-	// ...
+	copy_border_block(img_gray_in, img_gray_sh, w, h, x, y, x_sh, y_sh);
 
 	// Wait for all the threads to finish image copy to shared memory
-	//__syncthreads();
+	__syncthreads();
 
 	// Pixel value
 	int pixel = 0;
@@ -1009,15 +1007,19 @@ __global__ void filter_3x3_kernel_2D_shared_mem(byte* img_gray_in, byte* img_gra
 	{
 		for (int j = 0; j < 3; j++) 
 		{
-			// ...
+			int xx_sh = x_sh + j - 1;
+			int yy_sh = y_sh + i - 1;
+			//if (xx_sh >= blockDim.x || yy >= blockDim.y) return;
+			int iipos_sh = xx_sh + (yy_sh * BLOCK_W);
+			pixel += filter[(3 * i) + j] * img_gray_sh[iipos_sh];
 		}
 	}
 
 	// Normalize the pixel value to (0-255)
-	//pixel = (pixel / 2) + 128;
+	pixel = (pixel / 2) + 128;
 
 	// Save the value to the output image
-	// ...
+	img_gray_out[ipos] = pixel;
 }
 
 
@@ -1048,34 +1050,38 @@ void ejercicio_03_2_02_GPU_filter_shared_mem()
 
 
 	// GPU pointers
-	//byte* dev_gray_01;
-	//byte* dev_gray_02;	
-	//byte* dev_rgb02;
-	//int*  dev_filter;
+	byte* dev_gray_01;
+	byte* dev_gray_02;	
+	byte* dev_rgb02;
+	int*  dev_filter;
 
 
 	// Allocate GPU memory
-	// ...
+	cudaMalloc((void**)&dev_gray_01, gray_img_sz * sizeof(byte));
+	cudaMalloc((void**)&dev_gray_02, gray_img_sz * sizeof(byte));
+	cudaMalloc((void**)&dev_filter, 9 * sizeof(int));
+	cudaMalloc((void**)&dev_rgb02, rgb__img_sz * sizeof(byte));
 
 
 	// Copy input data to GPU memory
-	// ...
+	cudaMemcpy(dev_gray_01, grayscale_in, gray_img_sz * sizeof(byte), cudaMemcpyHostToDevice);
+	cudaMemcpy(dev_filter, filter, 9 * sizeof(int), cudaMemcpyHostToDevice);
 
 
 	// Kernels calling with gray scale images	
-	//filter_3x3_kernel_2D_shared_mem <<< dim_grid, dim_block >>> (dev_gray_01, dev_gray_02, dev_filter, w, h);
+	filter_3x3_kernel_2D_shared_mem <<< dim_grid, dim_block >>> (dev_gray_01, dev_gray_02, dev_filter, w, h);
 
 
 	// Kernels calling to convert gray to rgb images
-	//gray_to_rgb_kernel_2D <<< dim_grid, dim_block >>> (dev_gray_02, dev_rgb02, w, h);
+	gray_to_rgb_kernel_2D <<< dim_grid, dim_block >>> (dev_gray_02, dev_rgb02, w, h);
 
 
 	// Copy the results to to CPU memory
-	// ...
+	cudaMemcpy(rgb_out02, dev_rgb02, rgb__img_sz * sizeof(byte), cudaMemcpyDeviceToHost);
 
 
 	// Write bmp file
-	//write_bmp(filename01, w, h, (char*)rgb_out02);
+	write_bmp(filename01, w, h, (char*)rgb_out02);
 
 
 	// Some debug
@@ -1083,11 +1089,13 @@ void ejercicio_03_2_02_GPU_filter_shared_mem()
 
 
 	// Free GPU memory
-	// ...
-
+	cudaFree(dev_gray_01);
+	cudaFree(dev_gray_02);
+	cudaFree(dev_rgb02);
+	cudaFree(dev_filter);
 
 	// Free CPU memory
-	// ...
+	delete[] rgb_out02;
 }
 
 
@@ -1105,12 +1113,12 @@ int main()
 	//ejercicio_02_3_02_GPU_mandelbrot();
 
 	// Sesion 03
-	ejercicio_03_1_01_GPU_th_erode();
-	//ejercicio_03_2_02_GPU_filter();
+	//ejercicio_03_1_01_GPU_th_erode();
+	ejercicio_03_2_02_GPU_filter();
 
 	// Sesion 03 with shared mem
-	ejercicio_03_2_01_GPU_th_erode_shared_mem();
-	//ejercicio_03_2_02_GPU_filter_shared_mem();
+	//ejercicio_03_2_01_GPU_th_erode_shared_mem();
+	ejercicio_03_2_02_GPU_filter_shared_mem();
 
 	return EXIT_SUCCESS;
 }
