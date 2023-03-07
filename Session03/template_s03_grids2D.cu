@@ -784,41 +784,52 @@ __device__ void copy_border_block(byte* img_gray_in, byte* img_gray_sh, int w, i
 	}
 
 	// Local variables
-	// ...
+	int esquina_superior_izquierda = 0;
+	int esquina_superior_derecha = BLOCK_W - 1;
+	int esquina_inferior_izquierda = BLOCK_W * (BLOCK_H - 1); //(BLOCK_W * BLOCK_H) - BLOCK_W
+	int esquina_inferior_derecha = (BLOCK_H * BLOCK_W) - 1;
 
 	////////////////////////////////////////
 	// Copy x-axis borders
 	if (threadIdx.x == 0)
+	{
 		img_gray_sh[(x_sh - 1) + (y_sh * BLOCK_W)] = img_gray_in[(x - 1) + (y * w)];
-	if (threadIdx.x == blockDim.x - 1)
+	}
+	else if (threadIdx.x == blockDim.x - 1)
+	{
 		img_gray_sh[(x_sh + 1) + (y_sh * BLOCK_W)] = img_gray_in[(x + 1) + (y * w)];
+	}
 
 	
 	////////////////////////////////////////
 	// Copy y-axis borders
-	if(threadIdx.y == 0)
+	if (threadIdx.y == 0)
+	{
 		img_gray_sh[x_sh + ((y_sh - 1) * BLOCK_W)] = img_gray_in[x + ((y - 1) * w)];
-	if(threadIdx.y == blockDim.y - 1)
+	}
+	else if (threadIdx.y == blockDim.y - 1)
+	{
 		img_gray_sh[x_sh + ((y_sh + 1) * BLOCK_W)] = img_gray_in[x + ((y + 1) * w)];
+	}
 	
 
 	/////////////////////////////////////
 	// Copy 4 corners pixels
 	if (threadIdx.x == 0 && threadIdx.y == 0)
 	{
-		img_gray_sh[(x_sh - 1) + (y_sh - 1)] = img_gray_in[(x - 1) + ((y - 1) * w)];
+		img_gray_sh[esquina_superior_izquierda] = img_gray_in[(x - 1) + ((y - 1) * w)];
 	}
 	else if (threadIdx.x == 0 && threadIdx.y == blockDim.y - 1)
 	{
-		img_gray_sh[(x_sh - 1) + (y_sh + 1)] = img_gray_in[(x - 1) + ((y + 1) * w)];
+		img_gray_sh[esquina_inferior_izquierda] = img_gray_in[(x - 1) + ((y + 1) * w)];
 	}
 	else if (threadIdx.x == blockDim.x - 1 && threadIdx.y == 0)
 	{
-		img_gray_sh[(x_sh + 1) + (y_sh - 1)] = img_gray_in[(x + 1) + ((y - 1) * w)];
+		img_gray_sh[esquina_superior_derecha] = img_gray_in[(x + 1) + ((y - 1) * w)];
 	}
 	else if (threadIdx.x == blockDim.x - 1  && threadIdx.y == blockDim.y - 1)
 	{
-		img_gray_sh[(x_sh + 1) + (y_sh + 1)] = img_gray_in[(x + 1) + ((y + 1) * w)];
+		img_gray_sh[esquina_inferior_derecha] = img_gray_in[(x + 1) + ((y + 1) * w)];
 	}
 }
 
