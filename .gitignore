@@ -265,3 +265,4 @@ __pycache__/
 
 # Not ignore lena gray img
 !*/lena_gray.bmp
+!*.obj
